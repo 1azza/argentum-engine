@@ -143,7 +143,11 @@ object TextChanges {
      * color word becomes its chosen color. Callers that look up many objects in one pass compute
      * this once and [merge] it with each object's own component.
      */
-    fun global(state: GameState): List<TextReplacement> {
+    fun global(state: GameState): List<TextReplacement> = state.derived(GLOBAL_KEY) { computeGlobal(state) }
+
+    private val GLOBAL_KEY = TextChanges to "textGlobal"
+
+    private fun computeGlobal(state: GameState): List<TextReplacement> {
         val sources = state.getBattlefield().mapNotNull { id ->
             val container = state.getEntity(id) ?: return@mapNotNull null
             if (!container.has<ChangesAllColorWordsComponent>() || container.has<FaceDownComponent>()) return@mapNotNull null

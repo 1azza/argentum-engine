@@ -261,11 +261,11 @@ class GameEnvironment private constructor(
      *
      * @return Legal actions for [agentToAct], or empty if no one has priority.
      */
-    fun legalActions(): List<LegalAction> {
+    fun legalActions(includeManaAbilities: Boolean = true): List<LegalAction> {
         val playerId = agentToAct ?: return emptyList()
         if (state.pendingDecision != null && state.pendingDecision !is com.wingedsheep.engine.core.PlayCardDecision) return emptyList()
         if (state.gameOver) return emptyList()
-        return enumerator.enumerate(state, playerId, EnumerationMode.ACTIONS_ONLY)
+        return enumerator.enumerate(state, playerId, EnumerationMode.ACTIONS_ONLY, includeManaAbilities)
     }
 
     /**

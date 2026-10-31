@@ -136,7 +136,11 @@ class TriggerDetector(
      *   [BattlefieldStaticsIndex] — one walk that every per-entity ability resolution reads
      * - Damage observer trigger lists for specialized detection methods
      */
-    private fun buildTriggerIndex(state: GameState): TriggerIndex {
+    private val triggerIndexKey = this to "triggerIndex"
+
+    private fun buildTriggerIndex(state: GameState): TriggerIndex = state.derived(triggerIndexKey) { computeTriggerIndex(state) }
+
+    private fun computeTriggerIndex(state: GameState): TriggerIndex {
         val projected = state.projectedState
 
         // Phase 1: One walk for every battlefield-wide fact the per-entity ability resolution below

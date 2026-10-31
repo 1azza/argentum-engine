@@ -153,7 +153,10 @@ class ManaStaticsIndex private constructor(
          * Entities with no card definition, and statics of no interest here, cost one `when`
          * branch each; nothing is retained for an ordinary land or creature.
          */
-        fun build(state: GameState, cardRegistry: CardRegistry, conditions: ConditionEvaluator): ManaStaticsIndex {
+        fun build(state: GameState, cardRegistry: CardRegistry, conditions: ConditionEvaluator): ManaStaticsIndex =
+            state.derived(Triple(cardRegistry, conditions, "manaStatics").let { it to "manaStatics" }) { compute(state, cardRegistry, conditions) }
+
+        private fun compute(state: GameState, cardRegistry: CardRegistry, conditions: ConditionEvaluator): ManaStaticsIndex {
             var grantors: MutableList<ManaAbilityGrantor>? = null
             var donorGrantors: MutableList<DonorGrantor>? = null
             var overrides: MutableMap<EntityId, Color>? = null

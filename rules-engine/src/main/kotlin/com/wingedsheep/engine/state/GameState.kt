@@ -1525,6 +1525,20 @@ data class GameState(
         result
     }
 
+    /**
+     * Values engine services derive from this state alone, computed at most once per instance,
+     * like [projectedState]. [key] names the computation and must capture everything besides the
+     * state that the result depends on (the service instance, typically). Not serialized.
+     */
+    private val derived: java.util.concurrent.ConcurrentHashMap<Any, Any> by lazy { java.util.concurrent.ConcurrentHashMap() }
+
+    @Suppress("UNCHECKED_CAST")
+    fun <T : Any> derived(key: Any, compute: () -> T): T {
+        derived[key]?.let { return it as T }
+        val value = compute()
+        return (derived.putIfAbsent(key, value) ?: value) as T
+    }
+
     private val cachedBattlefield: List<EntityId> by lazy {
         val result = ArrayList<EntityId>()
         for ((key, ids) in zones) {
@@ -1986,3 +2000,4 @@ private fun initialObjectIdentities(
     }
     return identities
 }
+

@@ -71,12 +71,15 @@ class LegalActionEnumerator(
      * @param playerId The player to enumerate actions for
      * @param mode Controls what data is computed. [EnumerationMode.ACTIONS_ONLY] skips
      *   auto-tap preview computation for simulation/MCTS use.
+     * @param includeManaAbilities false leaves out battlefield mana abilities, for callers that
+     *   drop them anyway (an agent choosing moves pays costs through auto-tap).
      * @return All legal actions (including unaffordable ones marked with affordable=false)
      */
     fun enumerate(
         state: GameState,
         playerId: EntityId,
-        mode: EnumerationMode = EnumerationMode.FULL
+        mode: EnumerationMode = EnumerationMode.FULL,
+        includeManaAbilities: Boolean = true
     ): List<LegalAction> {
         if (state.continuationStack.any { it is com.wingedsheep.engine.core.FinishForcedPlayContinuation } &&
             state.pendingDecision != null && (state.pendingDecision !is com.wingedsheep.engine.core.PlayCardDecision ||
@@ -106,7 +109,8 @@ class LegalActionEnumerator(
         }
 
         // Normal priority: enumerate all action categories
-        val offers = (enumerators.flatMap { it.enumerate(context) } + optionalPaymentOffers(context)).filter { offer ->
+        val active = if (includeManaAbilities) enumerators else enumerators.filter { it !is ManaAbilityEnumerator }
+        val offers = (active.flatMap { it.enumerate(context) } + optionalPaymentOffers(context)).filter { offer ->
             val cast = offer.action as? com.wingedsheep.engine.core.CastSpell
             if (cast != null && context.castPermissionUtils.blockedByResolvedCastRestriction(
                     state, cast, staticRestrictionPresent = context.perSpellCastRestrictionPresent)
