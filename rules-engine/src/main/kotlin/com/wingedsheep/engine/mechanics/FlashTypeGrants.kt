@@ -1,5 +1,6 @@
 package com.wingedsheep.engine.mechanics
 
+import com.wingedsheep.engine.state.components.battlefield.battlefieldStaticKinds
 import com.wingedsheep.engine.handlers.ConditionEvaluator
 import com.wingedsheep.engine.handlers.EffectContext
 import com.wingedsheep.engine.handlers.PredicateContext
@@ -98,6 +99,7 @@ object FlashTypeGrants {
         // controller (CR 109.5), so a stolen granter must grant to its new controller, and
         // `controlledBattlefield` also drops phased-out permanents (CR 702.26b — a phased-out
         // permanent "is treated as though it does not exist").
+        if (GrantFlashToSpellType::class.java !in state.battlefieldStaticKinds(cardRegistry)) return false
         for (playerId in state.turnOrder) {
             for (entityId in state.controlledBattlefield(playerId)) {
                 val cardDef = state.getEntity(entityId)?.faceUpCardDefinition(cardRegistry) ?: continue

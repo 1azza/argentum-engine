@@ -1517,6 +1517,15 @@ data class GameState(
      * reads ask "does this player have an emblem granting X" once per candidate card, and the
      * set never changes within a state instance.
      */
+    /** Entities with an [com.wingedsheep.engine.state.components.identity.EmblemActivatedAbilityComponent], in entity order. */
+    val emblemActivatedAbilityHolders: List<EntityId> by lazy {
+        val result = ArrayList<EntityId>()
+        for ((id, container) in entities) {
+            if (container.has<com.wingedsheep.engine.state.components.identity.EmblemActivatedAbilityComponent>()) result.add(id)
+        }
+        result
+    }
+
     val emblemStaticHolders: List<EntityId> by lazy {
         val result = ArrayList<EntityId>()
         for ((id, container) in entities) {

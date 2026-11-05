@@ -1,5 +1,7 @@
 package com.wingedsheep.engine.state.components.battlefield
 
+import com.wingedsheep.engine.state.components.identity.faceUpCardDefinition
+
 import com.wingedsheep.engine.handlers.ConditionEvaluator
 import com.wingedsheep.engine.handlers.EffectContext
 import com.wingedsheep.engine.state.GameState
@@ -56,4 +58,24 @@ fun GameState.controlledActiveStaticAbilities(
                 sourceId to ability.ability
             else -> null
         }
+    }
+
+/**
+ * The classes of the [liveStaticAbilities] of every face-up battlefield permanent, plus the class
+ * wrapped by each [com.wingedsheep.sdk.scripting.ConditionalStaticAbility]. Battlefield scans for one
+ * rare kind of static (Cursed Totem's prohibition, a flash grant) run for every card while listing
+ * legal actions; when the kind isn't here they can skip the scan. Computed once per state.
+ */
+fun GameState.battlefieldStaticKinds(cardRegistry: com.wingedsheep.engine.registry.CardRegistry): Set<Class<*>> =
+    derived(cardRegistry to "battlefieldStaticKinds") {
+        val kinds = HashSet<Class<*>>()
+        for (permanentId in getBattlefield()) {
+            val def = getEntity(permanentId)
+                ?.faceUpCardDefinition(cardRegistry) ?: continue
+            for (ability in def.liveStaticAbilities(this, permanentId)) {
+                kinds += ability.javaClass
+                (ability as? com.wingedsheep.sdk.scripting.ConditionalStaticAbility)?.let { kinds += it.ability.javaClass }
+            }
+        }
+        kinds
     }

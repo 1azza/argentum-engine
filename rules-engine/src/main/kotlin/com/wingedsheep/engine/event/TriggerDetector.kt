@@ -276,6 +276,10 @@ class TriggerDetector(
         state: GameState,
         events: List<EngineGameEvent>
     ): List<PendingTrigger> {
+        // Every detector below reacts to an event in [events] or reworks the triggers they found,
+        // so a batch with no events (about half of them: a priority pass) triggers nothing. Return
+        // before building the trigger index for this state, which is otherwise the costly part.
+        if (events.isEmpty()) return emptyList()
         val index = buildTriggerIndex(state)
         val triggers = mutableListOf<PendingTrigger>()
         // Slot in [triggers] of each "is dealt damage" trigger already raised by this batch's

@@ -2,6 +2,7 @@ package com.wingedsheep.engine.legalactions.utils
 
 import com.wingedsheep.engine.state.components.battlefield.chosenCreatureOf
 import com.wingedsheep.engine.state.components.battlefield.liveStaticAbilities
+import com.wingedsheep.engine.state.components.battlefield.battlefieldStaticKinds
 import com.wingedsheep.engine.state.manaAbilitySourceAllowed
 import com.wingedsheep.engine.core.CastSpell
 import com.wingedsheep.engine.core.AlternativeCostType
@@ -1239,7 +1240,8 @@ class CastPermissionUtils(
     ): Boolean {
         val projected = state.projectedState
         val sourceOnBattlefield = sourceId in state.getBattlefield()
-        battlefield@ for (entityId in state.getBattlefield()) {
+        val anyPrinted = PreventActivatedAbilities::class.java in state.battlefieldStaticKinds(cardRegistry)
+        battlefield@ for (entityId in if (anyPrinted) state.getBattlefield() else emptyList()) {
             val cardDef = state.getEntity(entityId)?.faceUpCardDefinition(cardRegistry) ?: continue
             var context: PredicateContext? = null
             for (ability in cardDef.liveStaticAbilities(state, entityId)) {
@@ -1331,6 +1333,7 @@ class CastPermissionUtils(
         abilityIsManaAbility: Boolean = false
     ): Boolean {
         if (abilityIsManaAbility && !state.manaAbilitySourceAllowed(activatingPlayerId, sourceId, predicateEvaluator)) return true
+        if (PlayersCantActivateAbilities::class.java !in state.battlefieldStaticKinds(cardRegistry)) return false
         val projected = state.projectedState
         val sourceOnBattlefield = sourceId in state.getBattlefield()
         for (permanentId in state.getBattlefield()) {
@@ -1519,6 +1522,26 @@ class CastPermissionUtils(
     }
 
     /**
+     * The battlefield permanents, in battlefield order, with a static ability that
+     * [getStaticGrantedAbilitiesWithGranter] can turn into a granted activated ability, so that call
+     * (made once per permanent while listing legal actions) skips the rest. Computed once per state.
+     */
+    private fun activatedAbilityGranters(state: GameState): List<EntityId> =
+        state.derived(cardRegistry to "activatedAbilityGranters") {
+            state.getBattlefield().filter { permanentId ->
+                val container = state.getEntity(permanentId) ?: return@filter false
+                val card = container.get<CardComponent>() ?: return@filter false
+                val cardDef = cardRegistry.getCard(card.cardDefinitionId) ?: return@filter false
+                com.wingedsheep.engine.state.components.identity.RoomFaceStatics.activeStaticAbilities(container, cardDef).any { raw ->
+                    val ability = (raw as? com.wingedsheep.sdk.scripting.ConditionalStaticAbility)?.ability ?: raw
+                    ability is com.wingedsheep.sdk.scripting.HasAllActivatedAbilitiesOfCards ||
+                        ability is com.wingedsheep.sdk.scripting.HasAbilitiesOfChosenLinkedExiledCard ||
+                        ability is com.wingedsheep.sdk.scripting.GrantActivatedAbility
+                }
+            }
+        }
+
+    /**
      * Get activated abilities granted to an entity by static abilities on battlefield permanents,
      * paired with the EntityId of the permanent that granted each ability.
      *
@@ -1535,7 +1558,7 @@ class CastPermissionUtils(
 
         val result = mutableListOf<StaticGrantedAbility>()
 
-        for (permanentId in state.getBattlefield()) {
+        for (permanentId in activatedAbilityGranters(state)) {
             val container = state.getEntity(permanentId) ?: continue
             val card = container.get<CardComponent>() ?: continue
             if (container.has<com.wingedsheep.engine.state.components.identity.FaceDownComponent>()) continue
@@ -2033,7 +2056,8 @@ class CastPermissionUtils(
         entityId: EntityId,
         state: GameState,
         projected: ProjectedState = state.projectedState,
-    ): List<ActivatedAbility> = state.entities.flatMap { (emblemId, emblemContainer) ->
+    ): List<ActivatedAbility> = state.emblemActivatedAbilityHolders.flatMap { emblemId ->
+        val emblemContainer = state.getEntity(emblemId) ?: return@flatMap emptyList()
         val grant = emblemContainer.get<EmblemActivatedAbilityComponent>()
             ?: return@flatMap emptyList()
         val controllerId = emblemContainer.get<ControllerComponent>()?.playerId

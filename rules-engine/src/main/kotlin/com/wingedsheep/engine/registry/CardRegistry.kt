@@ -95,8 +95,9 @@ class CardRegistry(private val parent: CardRegistry? = null) {
      * @return The card definition, or null if not found
      */
     fun getCard(name: String): CardDefinition? {
-        // First try exact match with collector number format
-        cardsByNameAndNumber[name]?.let { return it }
+        // First try exact match with collector number format. Every such key contains '#', so a
+        // plain name skips the lookup (this is called for every permanent in every rules check).
+        if ('#' in name) cardsByNameAndNumber[name]?.let { return it }
         // Fall back to name-only lookup, then to the parent registry for an overlay.
         cardsByName[name]?.let { return it }
         // A merged permanent's composite id (mutate, CR 730) — built from this registry's own
