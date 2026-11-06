@@ -432,7 +432,7 @@ class CastPermissionUtils(
         }
 
     fun hasPlayFromTopOfLibrary(state: GameState, playerId: EntityId): Boolean {
-        for (entityId in state.getBattlefield(playerId)) {
+        if (PlayFromTopOfLibrary::class.java in state.battlefieldStaticKinds(cardRegistry)) for (entityId in state.getBattlefield(playerId)) {
             val cardDef = state.getEntity(entityId)?.faceUpCardDefinition(cardRegistry) ?: continue
             if (cardDef.liveStaticAbilities(state, entityId).any { it is PlayFromTopOfLibrary }) {
                 return true
@@ -484,7 +484,7 @@ class CastPermissionUtils(
      */
     fun hasPlayLandsFromTopOfLibrary(state: GameState, playerId: EntityId, landCardId: EntityId): Boolean {
         val landCard = state.getEntity(landCardId)?.get<CardComponent>() ?: return false
-        for (entityId in state.getBattlefield(playerId)) {
+        if (PlayLandsAndCastFilteredFromTopOfLibrary::class.java in state.battlefieldStaticKinds(cardRegistry)) for (entityId in state.getBattlefield(playerId)) {
             val cardDef = state.getEntity(entityId)?.faceUpCardDefinition(cardRegistry) ?: continue
             if (cardDef.liveStaticAbilities(state, entityId).any {
                     val active = activeStaticAbility(state, it, entityId, playerId)
@@ -504,6 +504,7 @@ class CastPermissionUtils(
      */
     fun getCastFilteredFromTopOfLibraryFilters(state: GameState, playerId: EntityId): List<GameObjectFilter> {
         val filters = mutableListOf<GameObjectFilter>()
+        if (PlayLandsAndCastFilteredFromTopOfLibrary::class.java !in state.battlefieldStaticKinds(cardRegistry)) return filters
         for (entityId in state.getBattlefield(playerId)) {
             val cardDef = state.getEntity(entityId)?.faceUpCardDefinition(cardRegistry) ?: continue
             for (ability in cardDef.liveStaticAbilities(state, entityId)) {
@@ -544,6 +545,7 @@ class CastPermissionUtils(
         state: GameState,
         playerId: EntityId
     ): List<TopOfLibraryCastGrant> = buildList {
+        if (CastSpellTypesFromTopOfLibrary::class.java !in state.battlefieldStaticKinds(cardRegistry)) return@buildList
         for (entityId in state.getBattlefield(playerId)) {
             val cardDef = state.getEntity(entityId)?.faceUpCardDefinition(cardRegistry) ?: continue
             for (ability in cardDef.liveStaticAbilities(state, entityId)) {

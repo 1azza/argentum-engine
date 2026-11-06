@@ -35,6 +35,13 @@ class CardRegistry(private val parent: CardRegistry? = null) {
     private val mergedDefinitions = java.util.concurrent.ConcurrentHashMap<String, CardDefinition>()
     // Reverse DFC index: back face name -> front face name
     private val backFaceToFrontFace = mutableMapOf<String, String>()
+    // A small direct-mapped cache of this registry's own lookups. The corpus map is far larger than
+    // the few dozen cards a game touches, and [getCard] runs for every permanent in every rules
+    // check, so the cache keeps those hits in fast memory. Entries are immutable and replaced whole,
+    // so concurrent games may share it without locking; registering or clearing empties it.
+    private val hot = arrayOfNulls<HotEntry>(HOT_SIZE)
+
+    private class HotEntry(@JvmField val name: String, @JvmField val card: CardDefinition)
 
     /**
      * Register a single card definition.
@@ -44,6 +51,7 @@ class CardRegistry(private val parent: CardRegistry? = null) {
      * carries no further `backFace` pointer — it stands alone as the back-face identity.
      */
     fun register(card: CardDefinition) {
+        hot.fill(null)
         cardsByName[card.name] = card
         // Also register by name#collectorNumber for variants.
         // When setCode is present, use "Name#SetCode-CollectorNumber" to avoid collisions
@@ -95,11 +103,9 @@ class CardRegistry(private val parent: CardRegistry? = null) {
      * @return The card definition, or null if not found
      */
     fun getCard(name: String): CardDefinition? {
-        // First try exact match with collector number format. Every such key contains '#', so a
-        // plain name skips the lookup (this is called for every permanent in every rules check).
-        if ('#' in name) cardsByNameAndNumber[name]?.let { return it }
-        // Fall back to name-only lookup, then to the parent registry for an overlay.
-        cardsByName[name]?.let { return it }
+        val slot = name.hashCode() and (HOT_SIZE - 1)
+        hot[slot]?.let { if (it.name == name) return it.card }
+        ownCard(name)?.let { hot[slot] = HotEntry(name, it); return it }
         // A merged permanent's composite id (mutate, CR 730) — built from this registry's own
         // lookups, so an overlay resolves its components the same way it resolves anything else.
         if (MergedCardDefinitions.isComposite(name)) {
@@ -107,6 +113,14 @@ class CardRegistry(private val parent: CardRegistry? = null) {
                 ?: MergedCardDefinitions.build(name, ::getCard).also { mergedDefinitions.putIfAbsent(name, it) }
         }
         return parent?.getCard(name)
+    }
+
+    private fun ownCard(name: String): CardDefinition? {
+        // First try exact match with collector number format. Every such key contains '#', so a
+        // plain name skips the lookup (this is called for every permanent in every rules check).
+        if ('#' in name) cardsByNameAndNumber[name]?.let { return it }
+        // Fall back to name-only lookup; [getCard] then tries merged ids and the parent overlay.
+        return cardsByName[name]
     }
 
     /**
@@ -203,9 +217,14 @@ class CardRegistry(private val parent: CardRegistry? = null) {
      * Clear all registered cards.
      */
     fun clear() {
+        hot.fill(null)
         cardsByName.clear()
         cardsByNameAndNumber.clear()
         variantsByName.clear()
         backFaceToFrontFace.clear()
+    }
+
+    private companion object {
+        const val HOT_SIZE = 1024
     }
 }

@@ -641,8 +641,28 @@ data class GameState(
      * Evaluated exactly once per immutable GameState instance.
      * Not serialized — body properties are excluded from kotlinx.serialization.
      */
-    val projectedState: ProjectedState by lazy {
-        StateProjector().project(this)
+    val projectedState: ProjectedState get() = projection.value
+
+    @kotlinx.serialization.Transient
+    private val projection = lazy {
+        inheritedProjection?.also { inheritedProjection = null } ?: StateProjector().project(this)
+    }
+
+    // Handed over by [keepingDerivedOf] to a copy that changed only who holds priority, and dropped
+    // once read. Neither the projection nor any [derived] value reads the priority fields.
+    @kotlinx.serialization.Transient private var inheritedProjection: ProjectedState? = null
+    @kotlinx.serialization.Transient private var inheritedDerived: Map<Any, Any>? = null
+
+    /**
+     * This copy of [parent], which differs from it only in [priorityPlayerId] and
+     * [priorityPassedBy], reuses whatever projection and [derived] values [parent] has already
+     * computed. Passing priority is the most common action, and recomputing both for it was
+     * a large share of the engine's time.
+     */
+    private fun keepingDerivedOf(parent: GameState): GameState {
+        if (parent.projection.isInitialized()) inheritedProjection = parent.projectedState
+        if (parent.derivedValues.isInitialized()) inheritedDerived = parent.derivedValues.value
+        return this
     }
 
     /**
@@ -1538,8 +1558,16 @@ data class GameState(
      * Values engine services derive from this state alone, computed at most once per instance,
      * like [projectedState]. [key] names the computation and must capture everything besides the
      * state that the result depends on (the service instance, typically). Not serialized.
+     * Carried over to copies that change only priority (see [keepingDerivedOf]), so [compute] must
+     * not read [priorityPlayerId] or [priorityPassedBy].
      */
-    private val derived: java.util.concurrent.ConcurrentHashMap<Any, Any> by lazy { java.util.concurrent.ConcurrentHashMap() }
+    @kotlinx.serialization.Transient
+    private val derivedValues = lazy {
+        java.util.concurrent.ConcurrentHashMap<Any, Any>().also { map ->
+            inheritedDerived?.let { map.putAll(it); inheritedDerived = null }
+        }
+    }
+    private val derived: java.util.concurrent.ConcurrentHashMap<Any, Any> get() = derivedValues.value
 
     @Suppress("UNCHECKED_CAST")
     fun <T : Any> derived(key: Any, compute: () -> T): T {
@@ -1684,7 +1712,11 @@ data class GameState(
      * priority window to the next remaining player.
      */
     fun withPriority(playerId: EntityId?): GameState =
-        copy(priorityPlayerId = redirectPriorityIfLeft(playerId), priorityPassedBy = emptySet())
+        copy(priorityPlayerId = redirectPriorityIfLeft(playerId), priorityPassedBy = emptySet()).keepingDerivedOf(this)
+
+    /** Hand priority to [playerId], keeping who has passed this round. */
+    fun withPriorityHolder(playerId: EntityId?): GameState =
+        copy(priorityPlayerId = playerId).keepingDerivedOf(this)
 
     private fun redirectPriorityIfLeft(playerId: EntityId?): EntityId? {
         if (playerId == null) return null
@@ -1697,7 +1729,7 @@ data class GameState(
      * Record that a player passed priority (returns new state).
      */
     fun withPriorityPassed(playerId: EntityId): GameState =
-        copy(priorityPassedBy = priorityPassedBy + playerId)
+        copy(priorityPassedBy = priorityPassedBy + playerId).keepingDerivedOf(this)
 
     /**
      * Check if all players still in the game have passed priority. Players who have

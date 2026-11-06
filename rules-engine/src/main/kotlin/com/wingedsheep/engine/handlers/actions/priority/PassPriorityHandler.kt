@@ -92,7 +92,7 @@ class PassPriorityHandler(
         // seats that have already passed. See [GameState.nextPriorityAfterPass].
         val nextPlayer = newState.nextPriorityAfterPass(action.playerId)
         return ExecutionResult.success(
-            newState.copy(priorityPlayerId = nextPlayer),
+            newState.withPriorityHolder(nextPlayer),
             listOf(PriorityChangedEvent(nextPlayer))
         )
     }
